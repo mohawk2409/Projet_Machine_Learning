@@ -116,7 +116,7 @@ def compute_hog_descriptors(images):
     for image in images:
         fd = hog(
             image,
-            orientations=12,
+            orientations=6,
             pixels_per_cell=(8, 8),
             cells_per_block=(2, 2),
             visualize=False,

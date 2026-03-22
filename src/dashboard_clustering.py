@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import colorsys
 from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 import matplotlib.pyplot as plt
@@ -75,8 +76,27 @@ def colorize_cluster(cluster_data, selected_cluster):
         cluster sélectionné superposé en rouge.
     """
     df_plot = cluster_data.copy()
+    # Tri numérique pour une attribution de couleur stable entre exécutions
+    unique_clusters = sorted(df_plot['cluster'].unique())
+    n_clusters = len(unique_clusters)
+
+    # Génère une palette de couleurs bien distinctes (espace HSV)
+    # puis mappe chaque cluster à une couleur unique.
+    color_map = {}
+    for i, cluster_id in enumerate(unique_clusters):
+        hue = i / max(n_clusters, 1)
+        r, g, b = colorsys.hsv_to_rgb(hue, 0.85, 0.95)
+        color_map[str(cluster_id)] = f"rgb({int(r*255)}, {int(g*255)}, {int(b*255)})"
+
     df_plot['cluster'] = df_plot['cluster'].astype(str)  # couleurs catégorielles
-    fig = px.scatter_3d(df_plot, x='x', y='y', z='z', color='cluster')
+    fig = px.scatter_3d(
+        df_plot,
+        x='x',
+        y='y',
+        z='z',
+        color='cluster',
+        color_discrete_map=color_map
+    )
     filtered_data = cluster_data[cluster_data['cluster'] == selected_cluster]
     fig.add_scatter3d(x=filtered_data['x'], y=filtered_data['y'], z=filtered_data['z'],
                     mode='markers', marker=dict(color='red', size=10),
