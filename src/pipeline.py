@@ -444,7 +444,7 @@ def hog_dbscan_kmeans_pipeline():
     dbscan.fit(hog_train_db)
     n_db = len(set(dbscan.labels_)) - (1 if -1 in dbscan.labels_ else 0)
     n_noise = int(np.sum(dbscan.labels_ == -1))
-    print(f"  → {n_db} clusters sur train, {n_noise} points de bruit")
+    print(f"{n_db} clusters sur train, {n_noise} points de bruit")
 
     if n_db > 0:
         cluster_ids = [c for c in set(dbscan.labels_) if c != -1]
