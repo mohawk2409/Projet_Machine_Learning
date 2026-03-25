@@ -426,18 +426,18 @@ def hog_dbscan_kmeans_pipeline():
     number_cluster = len(CLASS_NAMES)
 
     # --- KMeans : deux versions (avec et sans PCA) ---
-    # print(f"- KMeans ({number_cluster} clusters)...")
-    # km_hog = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=15)
-    # km_hog.fit(hog_train_n)
-    # pred_km_test = km_hog.predict(hog_test_n)
+    print(f"- KMeans ({number_cluster} clusters)...")
+    km_hog = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=15)
+    km_hog.fit(hog_train_n)
+    pred_km_test = km_hog.predict(hog_test_n)
 
-    # km_hog_pca = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=15)
-    # km_hog_pca.fit(hog_train_pca)
-    # pred_km_test_pca = km_hog_pca.predict(hog_test_pca)
+    km_hog_pca = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=15)
+    km_hog_pca.fit(hog_train_pca)
+    pred_km_test_pca = km_hog_pca.predict(hog_test_pca)
 
     # --- DBSCAN : fit sur train, assignation test au barycentre le plus proche ---
     dbscan_metric = "euclidean"
-    dbscan_eps = 0.6
+    dbscan_eps = 0.5
     dbscan_min_samples = 3
     print(f"- DBSCAN (eps={dbscan_eps}, min_samples={dbscan_min_samples}, metric='{dbscan_metric}')...")
     dbscan = SklearnDBSCAN(eps=dbscan_eps, min_samples=dbscan_min_samples, metric=dbscan_metric)
@@ -465,13 +465,13 @@ def hog_dbscan_kmeans_pipeline():
 
     print("\n\n ##### [HOG] Résultats (métriques sur TEST) ######")
     print("Avec PCA :\n")
-    # metric_hog_kmeans_pca = show_metric(labels_test, pred_km_test_pca, hog_test_pca,
-    #                                bool_show=True, name_descriptor="HOG_KMEANS_PCA",
-    #                                name_model="kmeans", bool_return=True)
-    # print("Sans PCA :\n")
-    # metric_hog_kmeans = show_metric(labels_test, pred_km_test, hog_test_n,
-    #                                bool_show=True, name_descriptor="HOG_KMEANS",
-    #                                name_model="kmeans", bool_return=True)
+    metric_hog_kmeans_pca = show_metric(labels_test, pred_km_test_pca, hog_test_pca,
+                                   bool_show=True, name_descriptor="HOG_KMEANS_PCA",
+                                   name_model="kmeans", bool_return=True)
+    print("Sans PCA :\n")
+    metric_hog_kmeans = show_metric(labels_test, pred_km_test, hog_test_n,
+                                   bool_show=True, name_descriptor="HOG_KMEANS",
+                                   name_model="kmeans", bool_return=True)
     print("Avec PCA :\n")
     metric_hog_dbscan_pca = show_metric(labels_test, pred_db_test_pca, hog_test_db_pca,
                                    bool_show=True, name_descriptor="HOG_DBSCAN_PCA",
@@ -484,21 +484,21 @@ def hog_dbscan_kmeans_pipeline():
     print("\n- Export des données TEST vers le dashboard")
     x_3d_hist = conversion_3d(hog_test_n)
 
-    # df_hog_kmeans = create_df_to_export(x_3d_hist, labels_test, pred_km_test, paths_test)
-    df_hog_dbscan = create_df_to_export(x_3d_hist, labels_test, pred_db_test, paths_test)
-    # df_metric_hog = pd.DataFrame([
-    #     metric_hog_kmeans_pca,
-    #     metric_hog_kmeans,
-    #     metric_hog_dbscan_pca,
-    #     metric_hog_dbscan
-    # ])
+    df_hog_kmeans = create_df_to_export(x_3d_hist, labels_test, pred_km_test_pca, paths_test)
+    df_hog_dbscan = create_df_to_export(x_3d_hist, labels_test, pred_db_test_pca, paths_test)
+    df_metric_hog = pd.DataFrame([
+        metric_hog_kmeans_pca,
+        metric_hog_kmeans,
+        metric_hog_dbscan_pca,
+        metric_hog_dbscan
+    ])
 
     if not os.path.exists(PATH_OUTPUT):
         os.makedirs(PATH_OUTPUT)
 
-    # df_hog_kmeans.to_excel(PATH_OUTPUT + "/save_clustering_hog_kmeans.xlsx")
+    df_hog_kmeans.to_excel(PATH_OUTPUT + "/save_clustering_hog_kmeans.xlsx")
     df_hog_dbscan.to_excel(PATH_OUTPUT + "/save_clustering_hog_dbscan.xlsx")
-    # df_metric_hog.to_excel(PATH_OUTPUT + "/save_metric_hog.xlsx")
+    df_metric_hog.to_excel(PATH_OUTPUT + "/save_metric_hog.xlsx")
     print("Fin. \n\n Pour visualiser, lancer : streamlit run dashboard_clustering.py")
 if __name__ == "__main__":
     # pipeline()             # HISTOGRAM + HOG + COLOR_HSV avec KMeans

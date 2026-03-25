@@ -135,12 +135,43 @@ try:
 except FileNotFoundError:
     HIST_DBSCAN_AVAILABLE = False
 
+# Résultats BoVW (générés par BovW())
+try:
+    df_bovw_kmeans = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_bovw_sift_kmeans.xlsx"))
+    BOVW_KMEANS_AVAILABLE = True
+except FileNotFoundError:
+    BOVW_KMEANS_AVAILABLE = False
+
+try:
+    df_bovw_kmeans_pca = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_bovw_sift_kmeans_pca.xlsx"))
+    BOVW_KMEANS_PCA_AVAILABLE = True
+except FileNotFoundError:
+    BOVW_KMEANS_PCA_AVAILABLE = False
+
+try:
+    df_bovw_dbscan = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_bovw_sift_dbscan.xlsx"))
+    BOVW_DBSCAN_AVAILABLE = True
+except FileNotFoundError:
+    BOVW_DBSCAN_AVAILABLE = False
+
+try:
+    df_bovw_dbscan_pca = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_bovw_sift_dbscan_pca.xlsx"))
+    BOVW_DBSCAN_PCA_AVAILABLE = True
+except FileNotFoundError:
+    BOVW_DBSCAN_PCA_AVAILABLE = False
+
 # Résultats HOG / COLOR (optionnels selon le pipeline exécuté)
 try:
     df_hog = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_hog_kmeans.xlsx"))
     HOG_AVAILABLE = True
 except FileNotFoundError:
     HOG_AVAILABLE = False
+
+try:
+    df_hog_dbscan = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_hog_dbscan.xlsx"))
+    HOG_DBSCAN_AVAILABLE = True
+except FileNotFoundError:
+    HOG_DBSCAN_AVAILABLE = False
 
 try:
     df_color = pd.read_excel(os.path.join(_DIR, "output", "save_clustering_color_kmeans.xlsx"))
@@ -161,6 +192,8 @@ def _load_metric_file(filename):
 
 df_metric_global = _load_metric_file("save_metric.xlsx")
 df_metric_hist = _load_metric_file("save_metric_hist.xlsx")
+df_metric_bovw = _load_metric_file("save_metric_bovw.xlsx")
+df_metric_hog = _load_metric_file("save_metric_hog.xlsx")
 
 # Chargement optionnel des résultats Hu Moments (générés par hu_moments_pipeline())
 try:
@@ -208,10 +241,30 @@ with tab1:
         descriptor_options += ["HIST_DBSCAN"]
     else:
         st.sidebar.info("Lancez `hist_dbscan_kmeans_pipeline()` dans `pipeline.py` pour activer HIST_DBSCAN.")
-    if HOG_AVAILABLE:
-        descriptor_options += ["HOG"]
+    if BOVW_KMEANS_AVAILABLE:
+        descriptor_options += ["BOVW_KMEANS"]
     else:
-        st.sidebar.info("Lancez `pipeline()` dans `pipeline.py` pour activer HOG.")
+        st.sidebar.info("Lancez `BovW()` dans `pipeline2.py` pour activer BOVW_KMEANS.")
+    if BOVW_KMEANS_PCA_AVAILABLE:
+        descriptor_options += ["BOVW_KMEANS_PCA"]
+    else:
+        st.sidebar.info("Lancez `BovW()` dans `pipeline2.py` pour activer BOVW_KMEANS_PCA.")
+    if BOVW_DBSCAN_AVAILABLE:
+        descriptor_options += ["BOVW_DBSCAN"]
+    else:
+        st.sidebar.info("Lancez `BovW()` dans `pipeline2.py` pour activer BOVW_DBSCAN.")
+    if BOVW_DBSCAN_PCA_AVAILABLE:
+        descriptor_options += ["BOVW_DBSCAN_PCA"]
+    else:
+        st.sidebar.info("Lancez `BovW()` dans `pipeline2.py` pour activer BOVW_DBSCAN_PCA.")
+    if HOG_AVAILABLE:
+        descriptor_options += ["HOG_KMEANS"]
+    else:
+        st.sidebar.info("Lancez `pipeline()` ou `hog_dbscan_kmeans_pipeline()` dans `pipeline.py` pour activer HOG_KMEANS.")
+    if HOG_DBSCAN_AVAILABLE:
+        descriptor_options += ["HOG_DBSCAN"]
+    else:
+        st.sidebar.info("Lancez `hog_dbscan_kmeans_pipeline()` dans `pipeline.py` pour activer HOG_DBSCAN.")
     if COLOR_AVAILABLE:
         descriptor_options += ["COLOR_HSV"]
     else:
@@ -237,9 +290,24 @@ with tab1:
     elif descriptor == "HIST_DBSCAN":
         df = df_hist_dbscan
         metric_source_file = os.path.join(_DIR, "output", "save_clustering_hist_dbscan.xlsx")
-    elif descriptor == "HOG":
+    elif descriptor == "BOVW_KMEANS":
+        df = df_bovw_kmeans
+        metric_source_file = os.path.join(_DIR, "output", "save_clustering_bovw_sift_kmeans.xlsx")
+    elif descriptor == "BOVW_KMEANS_PCA":
+        df = df_bovw_kmeans_pca
+        metric_source_file = os.path.join(_DIR, "output", "save_clustering_bovw_sift_kmeans_pca.xlsx")
+    elif descriptor == "BOVW_DBSCAN":
+        df = df_bovw_dbscan
+        metric_source_file = os.path.join(_DIR, "output", "save_clustering_bovw_sift_dbscan.xlsx")
+    elif descriptor == "BOVW_DBSCAN_PCA":
+        df = df_bovw_dbscan_pca
+        metric_source_file = os.path.join(_DIR, "output", "save_clustering_bovw_sift_dbscan_pca.xlsx")
+    elif descriptor in ["HOG", "HOG_KMEANS"]:
         df = df_hog
         metric_source_file = os.path.join(_DIR, "output", "save_clustering_hog_kmeans.xlsx")
+    elif descriptor == "HOG_DBSCAN":
+        df = df_hog_dbscan
+        metric_source_file = os.path.join(_DIR, "output", "save_clustering_hog_dbscan.xlsx")
     elif descriptor == "COLOR_HSV":
         df = df_color
         metric_source_file = os.path.join(_DIR, "output", "save_clustering_color_kmeans.xlsx")
@@ -290,12 +358,18 @@ with tab1:
         dominant_label = int(subset['label'].mode().iloc[0])
         return CLASS_NAMES[dominant_label]
 
-    cluster_options = [
-        f"Cluster {c}  —  {dominant_class(c)}"
-        for c in available_clusters
-    ]
-    selected_option = st.sidebar.selectbox('Sélectionner un Cluster', cluster_options)
-    selected_cluster = int(selected_option.split()[1])
+    if len(available_clusters) == 0:
+        st.warning(
+            "Aucun cluster exploitable à afficher pour ce descripteur "
+            "(uniquement du bruit DBSCAN ou fichier vide)."
+        )
+        st.stop()
+
+    selected_cluster = st.sidebar.selectbox(
+        'Sélectionner un Cluster',
+        available_clusters,
+        format_func=lambda c: f"Cluster {c}  —  {dominant_class(c)}"
+    )
 
     # Filtrer les données en fonction du cluster sélectionné
     filtered_data = df[df['cluster'] == selected_cluster]
@@ -360,6 +434,10 @@ with tab2:
         all_metrics_dfs.append(df_metric_global)
     if not df_metric_hist.empty:
         all_metrics_dfs.append(df_metric_hist)
+    if not df_metric_bovw.empty:
+        all_metrics_dfs.append(df_metric_bovw)
+    if not df_metric_hog.empty:
+        all_metrics_dfs.append(df_metric_hog)
     if HU_AVAILABLE:
         all_metrics_dfs.append(df_metric_hu)
     if GIST_AVAILABLE:
