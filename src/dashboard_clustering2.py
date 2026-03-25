@@ -45,7 +45,12 @@ def _load(filename):
     return df
 
 
-df_bovw = _load("save_clustering_bovw_sift_kmeans.xlsx")
+df_bovw_kmeans = _load("save_clustering_bovw_sift_kmeans.xlsx")
+try:
+    df_bovw_dbscan = _load("save_clustering_bovw_sift_dbscan.xlsx")
+    BOVW_DBSCAN_AVAILABLE = True
+except FileNotFoundError:
+    BOVW_DBSCAN_AVAILABLE = False
 df_metric_bovw = _load("save_metric_bovw.xlsx")
 
 try:
@@ -67,16 +72,22 @@ with tab1:
     st.sidebar.write("#### Veuillez sélectionner les clusters à analyser")
 
     # Sélection du descripteur
-    descriptor_options = ["BoVW+SIFT"]
+    descriptor_options = ["BOVW_KMEANS"]
+    if BOVW_DBSCAN_AVAILABLE:
+        descriptor_options += ["BOVW_DBSCAN"]
+    else:
+        st.sidebar.info("⚠️ Lancez `BovW()` dans `pipeline2.py` pour activer BOVW_DBSCAN.")
     if COMBINED_AVAILABLE:
         descriptor_options += ["COMBINED_KMEANS", "COMBINED_DBSCAN"]
     else:
-        st.sidebar.info("⚠️ Lancez `python pipeline2.py` pour activer les descripteurs COMBINED.")
+        st.sidebar.info("⚠️ Lancez `combined_pipeline()` dans `pipeline2.py` pour activer les descripteurs COMBINED.")
 
     descriptor = st.sidebar.selectbox('Sélectionner un descripteur', descriptor_options)
 
-    if descriptor == "BoVW+SIFT":
-        df = df_bovw
+    if descriptor == "BOVW_KMEANS":
+        df = df_bovw_kmeans
+    elif descriptor == "BOVW_DBSCAN":
+        df = df_bovw_dbscan
     elif descriptor == "COMBINED_KMEANS":
         df = df_combined_kmeans
     elif descriptor == "COMBINED_DBSCAN":
@@ -87,6 +98,10 @@ with tab1:
     n_noise = int((df['cluster'] == -1).sum())
     if n_noise > 0:
         st.sidebar.warning(f"⚠️ DBSCAN : {n_noise} points de bruit (label -1) non affichés")
+
+    if len(available_clusters) == 0:
+        st.warning("Aucun cluster exploitable à afficher pour ce descripteur.")
+        st.stop()
 
     def dominant_class(cluster_id):
         subset = df[df['cluster'] == cluster_id]
@@ -157,103 +172,3 @@ with tab2:
     plot_metric(df_all)
     st.write('## Métriques détaillées')
     st.dataframe(df_all)
-
-
-
-@st.cache_data
-def colorize_cluster(cluster_data, selected_cluster):
-    fig = px.scatter_3d(cluster_data, x='x', y='y', z='z', color='cluster')
-    filtered_data = cluster_data[cluster_data['cluster'] == selected_cluster]
-    fig.add_scatter3d(x=filtered_data['x'], y=filtered_data['y'], z=filtered_data['z'],
-                    mode='markers', marker=dict(color='red', size=10),
-                    name=f'Cluster {selected_cluster}')
-    return fig
-
-@st.cache_data
-def plot_metric(df_metric):
-    fig1 = px.bar(df_metric, x='descriptor', y='ami',
-                  color='descriptor',
-                  title="Score AMI par descripteur",
-                  labels={'ami': 'Adjusted Mutual Information', 'descriptor': 'Descripteur'})
-    st.plotly_chart(fig1)
-
-        
-# Chargement des données du clustering
-df_bovw = pd.read_excel("output/save_clustering_bovw_sift_kmeans.xlsx")
-df_metric = pd.read_excel("output/save_metric_bovw.xlsx")
-
-if 'Unnamed: 0' in df_metric.columns:
-    df_metric.drop(columns="Unnamed: 0", inplace=True)
-
-# Création de deux onglets
-tab1, tab2 = st.tabs(["Analyse par descripteur", "Analyse global" ])
-
-# Onglet numéro 1
-with tab1:
-
-    st.write('## Résultat de Clustering des données Snacks')
-    st.sidebar.write("####  Veuillez sélectionner les clusters à analyser" )
-    # Sélection des descripteurs
-    descriptor =  st.sidebar.selectbox('Sélectionner un descripteur', ["BoVW"])
-    if descriptor=="BoVW":
-        df = df_bovw
-
-    # ⚠️ Les clusters K-Means ont des labels arbitraires (0..N) qui ne correspondent
-    # PAS aux indices des classes. On sélectionne donc par numéro de cluster.
-    n_clusters = int(df['cluster'].max()) + 1
-
-    # Pour chaque cluster, calculer la classe dominante (celle qui y est la plus représentée)
-    def dominant_class(cluster_id):
-        subset = df[df['cluster'] == cluster_id]
-        if len(subset) == 0:
-            return "(vide)"
-        dominant_label = int(subset['label'].mode().iloc[0])
-        return CLASS_NAMES[dominant_label]
-
-    cluster_options = [
-        f"Cluster {i}  —  majoritairement : {dominant_class(i)}"
-        for i in range(n_clusters)
-    ]
-    selected_cluster_option = st.sidebar.selectbox('Sélectionner un Cluster', cluster_options)
-    selected_cluster = int(selected_cluster_option.split()[1])
-
-    # Filtrer les données en fonction du cluster sélectionné
-    filtered_data = df[df['cluster'] == selected_cluster]
-    cluster_indices = filtered_data.index
-    dom_class = dominant_class(selected_cluster)
-
-    st.write(f"###  Analyse du descripteur {descriptor}" )
-    st.write(f"#### Cluster {selected_cluster}  ·  {len(filtered_data)} images  ·  classe dominante : **{dom_class}**")
-    st.write(f"####  Visualisation 3D du clustering avec descripteur {descriptor}" )
-    # Création d'un graph 3D des clusters
-    fig = colorize_cluster(df, selected_cluster)
-    st.plotly_chart(fig)
-
-    # Affichage des images du cluster sélectionné
-    if 'image_path' in filtered_data.columns and len(filtered_data) > 0:
-        st.write(f"#### Images du cluster {selected_cluster}  (légende = vraie classe)")
-        # Composition réelle du cluster (proportion par classe)
-        class_counts = filtered_data['label'].value_counts().sort_index()
-        class_labels = [CLASS_NAMES[int(i)] for i in class_counts.index]
-        composition = {cl: int(cnt) for cl, cnt in zip(class_labels, class_counts.values)}
-        st.write("**Composition du cluster :**", composition)
-
-        n_display = min(15, len(filtered_data))
-        cols = st.columns(5)
-        for i, (_, row) in enumerate(filtered_data.head(n_display).iterrows()):
-            try:
-                img = Image.open(row['image_path'])
-                # La légende affiche la VRAIE classe de l'image (pas son cluster)
-                cols[i % 5].image(img, caption=f"✅ {CLASS_NAMES[int(row['label'])]}", use_column_width=True)
-            except Exception as e:
-                cols[i % 5].write(f"Erreur : {e}")
-    else:
-        st.write("Aucune image disponible pour ce cluster.")
-
-# Onglet numéro 2
-with tab2:
-    st.write('## Analyse Global des descripteurs' )
-    # Complèter la fonction plot_metric() pour afficher les histogrammes du score AMI
-    plot_metric(df_metric)
-    st.write('## Métriques ' )
-    st.dataframe(df_metric)
