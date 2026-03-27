@@ -62,9 +62,10 @@ def fix_image_path(path):
 def load_outputs(output_dir):
     clustering = {}
     metrics = {}
+    silhouette_curves = pd.DataFrame()
 
     if not os.path.isdir(output_dir):
-        return clustering, metrics
+        return clustering, metrics, silhouette_curves
 
     for filename in os.listdir(output_dir):
         if filename.startswith("save_clustering_") and filename.endswith(".xlsx"):
@@ -103,7 +104,14 @@ def load_outputs(output_dir):
             if key != "all":
                 metrics[key] = df
 
-    return clustering, metrics
+        if filename == "save_metric_silhouette_curve.xlsx":
+            path = os.path.join(output_dir, filename)
+            df = pd.read_excel(path)
+            if "Unnamed: 0" in df.columns:
+                df = df.drop(columns=["Unnamed: 0"])
+            silhouette_curves = df
+
+    return clustering, metrics, silhouette_curves
 
 
 @st.cache_data
@@ -155,7 +163,7 @@ def main():
     output_dir = find_output_dir()
     st.caption(f"Results folder: {output_dir}")
 
-    clustering, metrics = load_outputs(output_dir)
+    clustering, metrics, silhouette_curves = load_outputs(output_dir)
     if len(clustering) == 0:
         st.error("No clustering result file found. Run pipeline_unified.py first.")
         return
@@ -224,6 +232,31 @@ def main():
             st.info("No metric row found for selected descriptor.")
         else:
             st.dataframe(row, width="stretch", hide_index=True)
+
+    st.subheader("Silhouette vs number of clusters")
+    required_curve_cols = {"descriptor", "model", "k", "silhouette"}
+    if silhouette_curves.empty:
+        st.info("No silhouette curve file found. Run pipeline_unified.py to generate save_metric_silhouette_curve.xlsx.")
+    elif not required_curve_cols.issubset(set(silhouette_curves.columns)):
+        st.info("Silhouette curve file is missing required columns: descriptor, model, k, silhouette.")
+    else:
+        curve_df = silhouette_curves.copy()
+        curve_df["descriptor"] = curve_df["descriptor"].astype(str).str.upper()
+
+        fig_sil = px.line(
+            curve_df,
+            x="k",
+            y="silhouette",
+            color="model",
+            markers=True,
+            facet_col="descriptor",
+            facet_col_wrap=2,
+            title="Silhouette by number of clusters (KMeans vs Hierarchical)",
+        )
+        fig_sil.update_layout(xaxis_title="Number of clusters (k)", yaxis_title="Silhouette score")
+        st.plotly_chart(fig_sil, width="stretch")
+
+        st.caption("Curves are precomputed in pipeline_unified.py with pipeline-aligned parameters and train/test protocol.")
 
     st.subheader("Sample images")
     if "image_path" not in filtered.columns:
