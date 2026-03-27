@@ -23,16 +23,23 @@ import pandas as pd
 import cv2
 import numpy as np
 
-from features import *
-from clustering import KMeans, show_metric
-from utils import conversion_3d, create_df_to_export
-from constant import PATH_OUTPUT, CLASS_NAMES, DATA_PATH
+try:
+    from .features import *
+    from .clustering import KMeans, show_metric
+    from .utils import conversion_3d, create_df_to_export
+    from .constant import PATH_OUTPUT, CLASS_NAMES, DATA_PATH
+except ImportError:
+    from features import *
+    from clustering import KMeans, show_metric
+    from utils import conversion_3d, create_df_to_export
+    from constant import PATH_OUTPUT, CLASS_NAMES, DATA_PATH
 from sklearn.cluster import KMeans as SklearnKMeans, DBSCAN as SklearnDBSCAN
 from sklearn.preprocessing import normalize
 from sklearn.metrics import pairwise_distances
 
 
 def BovW():
+    """Pipeline BoVW+SIFT : extraction, clustering, métriques, exports."""
 
     print("\n\n ##### [BoVW] Chargement des données Snacks + split train/test ######")
     (
@@ -76,6 +83,7 @@ def BovW():
     vocab_km = SklearnKMeans(n_clusters=VOCAB_SIZE, random_state=42, n_init=3, max_iter=300)
     vocab_km.fit(all_descriptors_stacked)
 
+    # Petit adaptateur pour exposer nearest_cluster().
     class _VocabWrapper:
         def __init__(self, sk_model):
             self._model = sk_model
@@ -88,6 +96,7 @@ def BovW():
     # ------------------------------------------------------------------
     # ÉTAPE 3 : Encodage BoVW (train ET test)
     # ------------------------------------------------------------------
+    # Encode chaque image en histogramme de mots visuels.
     def encode_bovw(desc_per_image):
         features = []
         for des in desc_per_image:
@@ -106,26 +115,24 @@ def BovW():
     bovw_train = encode_bovw(desc_per_image_train)
     bovw_test  = encode_bovw(desc_per_image_test)
 
-    # PCA (fit train, transform test) pour variantes KMeans/DBSCAN
+    # PCA pour variantes KMeans/DBSCAN (fit train, transform test).
     n_comp = min(50, bovw_train.shape[1], bovw_train.shape[0] - 1)
     pca_bovw = PCA(n_components=n_comp, random_state=42)
     bovw_train_pca = pca_bovw.fit_transform(bovw_train)
     bovw_test_pca = pca_bovw.transform(bovw_test)
     print(f"- BoVW PCA : train {bovw_train_pca.shape} | test {bovw_test_pca.shape} | variance={pca_bovw.explained_variance_ratio_.sum():.1%}")
 
-    # Vue dédiée DBSCAN : normalisation L2 + métrique cosinus
+    # Vue DBSCAN : normalisation L2 + métrique cosinus.
     bovw_train_db = normalize(bovw_train)
     bovw_test_db = normalize(bovw_test)
 
-    # Variante DBSCAN sur espace PCA
+    # Variante DBSCAN sur espace PCA.
     bovw_train_pca_db = normalize(bovw_train_pca)
     bovw_test_pca_db = normalize(bovw_test_pca)
 
     print(f"- Train : {bovw_train.shape}  |  Test : {bovw_test.shape}")
 
-    # ------------------------------------------------------------------
-    # CLUSTERING : fit sur train, predict sur test
-    # ------------------------------------------------------------------
+    # Clustering : fit train, prédiction/assignation test.
     number_cluster = len(CLASS_NAMES)
     print(f"\n\n ##### [BoVW] Clustering KMeans ({number_cluster} clusters) – fit train ######")
     km = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=10)
@@ -138,7 +145,7 @@ def BovW():
     pred_test_pca = km_pca.predict(bovw_test_pca)
 
     print("- Prédiction sur le test : OK")
-    # --- DBSCAN : fit sur train, assignation test au barycentre le plus proche ---
+    # DBSCAN : fit train, assignation test via centres.
     dbscan_metric = "cosine"
     dbscan_eps = 0.5
     dbscan_min_samples = 7
@@ -155,10 +162,10 @@ def BovW():
         dists = pairwise_distances(bovw_test_db, centers, metric=dbscan_metric)
         pred_db_test = np.array([cluster_ids[i] for i in np.argmin(dists, axis=1)])
     else:
-        # Aucun cluster trouvé sur train : on conserve explicitement "bruit"
+        # Cas limite : aucun cluster détecté.
         pred_db_test = np.full(len(labels_test), -1, dtype=int)
 
-    # --- DBSCAN sur BoVW PCA : fit train, assignation test au barycentre ---
+    # DBSCAN sur BoVW PCA : même logique d'assignation test.
     dbscan_pca_metric = "cosine"
     dbscan_pca_eps = 0.2
     dbscan_pca_min_samples = 3
@@ -246,9 +253,7 @@ def combined_pipeline():
         images_test,  labels_test,  paths_test,  images_color_test
     ) = load_train_test_split()
 
-    # ------------------------------------------------------------------
-    # EXTRACTION
-    # ------------------------------------------------------------------
+    # Extraction des 3 familles de descripteurs.
     print("\n\n ##### [COMBINED] Extraction des descripteurs ######")
     print("- HSV (train + test)...")
     hsv_train  = compute_hsv_histograms(images_color_train)
@@ -264,17 +269,13 @@ def combined_pipeline():
     combined_test  = np.concatenate([hsv_test,  hog_test,  lbp_test],  axis=1)
     print(f"- Vecteur combiné : train {combined_train.shape}  |  test {combined_test.shape}")
 
-    # ------------------------------------------------------------------
-    # NORMALISATION : fit sur train uniquement
-    # ------------------------------------------------------------------
+    # Normalisation (fit train uniquement).
     print("\n\n ##### [COMBINED] Normalisation ######")
     scaler = StandardScaler().fit(combined_train)
     train_norm = scaler.transform(combined_train)
     test_norm  = scaler.transform(combined_test)
 
-    # ------------------------------------------------------------------
-    # CLUSTERING 1 : KMeans – fit sur train, predict sur test
-    # ------------------------------------------------------------------
+    # Clustering 1 : KMeans (fit train, predict test).
     number_cluster = len(CLASS_NAMES)
     print(f"\n\n ##### [COMBINED] KMeans ({number_cluster} clusters) ######")
     km = SklearnKMeans(n_clusters=number_cluster, random_state=42, n_init=10)
@@ -282,11 +283,7 @@ def combined_pipeline():
     pred_km_test = km.predict(test_norm)
     print("- Prédiction KMeans sur test : OK")
 
-    # ------------------------------------------------------------------
-    # CLUSTERING 2 : DBSCAN sur PCA
-    # DBSCAN n'a pas de predict() natif — on assigne chaque point test
-    # au cluster dont le centre (barycentre) est le plus proche.
-    # ------------------------------------------------------------------
+    # Clustering 2 : DBSCAN sur PCA + assignation test par barycentres.
     print("\n\n ##### [COMBINED] DBSCAN (PCA 50 comp.) ######")
     pca = PCA(n_components=50, random_state=42)
     train_pca = pca.fit_transform(train_norm)   # fit PCA sur train
@@ -299,7 +296,7 @@ def combined_pipeline():
     n_noise_train = int(np.sum(dbscan.labels_ == -1))
     print(f"  → {n_dbscan_clusters} clusters détectés sur train, {n_noise_train} points de bruit")
 
-    # Assignation du test : chaque point test → barycentre le plus proche
+    # Assignation du test : point -> barycentre le plus proche.
     if n_dbscan_clusters > 0:
         cluster_ids = [c for c in set(dbscan.labels_) if c != -1]
         centers = np.array([
@@ -311,9 +308,7 @@ def combined_pipeline():
         pred_db_test = np.zeros(len(labels_test), dtype=int)
     print(f"- Assignation DBSCAN sur test : OK")
 
-    # ------------------------------------------------------------------
-    # MÉTRIQUES (sur TEST)
-    # ------------------------------------------------------------------
+    # Métriques sur l'ensemble de test.
     print("\n\n ##### [COMBINED] Résultats (métriques sur TEST) ######")
     metric_kmeans = show_metric(
         labels_test, pred_km_test, test_norm,
@@ -326,9 +321,7 @@ def combined_pipeline():
         name_model="dbscan", bool_return=True
     )
 
-    # ------------------------------------------------------------------
-    # EXPORT (données TEST uniquement dans le dashboard)
-    # ------------------------------------------------------------------
+    # Export des résultats test pour le dashboard.
     print("\n- Export des données TEST vers le dashboard")
     x_3d = conversion_3d(test_norm)
 

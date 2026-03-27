@@ -1,6 +1,6 @@
 import os
 
-PATH_OUTPUT = "output"
+PATH_OUTPUT = os.path.join(os.path.dirname(__file__), "output")
 MODEL_CLUSTERING = "kmeans"
 IMAGE_SIZE = (64, 64)  # Taille de redimensionnement des images
 

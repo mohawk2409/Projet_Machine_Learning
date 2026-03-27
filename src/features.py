@@ -5,7 +5,10 @@ from skimage.feature import hog
 from skimage import transform
 import itertools
 
-from constant import IMAGE_SIZE, DATA_PATH, CLASS_NAMES
+try:
+    from .constant import IMAGE_SIZE, DATA_PATH, CLASS_NAMES
+except ImportError:
+    from constant import IMAGE_SIZE, DATA_PATH, CLASS_NAMES
 
 
 def load_images_from_directory(data_path=DATA_PATH, image_size=IMAGE_SIZE):
@@ -76,16 +79,14 @@ def load_train_test_split(data_path=DATA_PATH, image_size=IMAGE_SIZE,
 
     images_train       = [images[i]        for i in idx_train]
     images_test        = [images[i]        for i in idx_test]
-    images_color_train = [images_color[i]  for i in idx_train]
-    images_color_test  = [images_color[i]  for i in idx_test]
     labels_train       = labels[idx_train]
     labels_test        = labels[idx_test]
     paths_train        = [paths[i]         for i in idx_train]
     paths_test         = [paths[i]         for i in idx_test]
 
     print(f"  Split : {len(images_train)} images train  |  {len(images_test)} images test")
-    return (images_train, labels_train, paths_train, images_color_train,
-            images_test,  labels_test,  paths_test,  images_color_test)
+    return (images_train, labels_train, paths_train,
+            images_test,  labels_test,  paths_test)
 
 
 def compute_gray_histograms(images):
